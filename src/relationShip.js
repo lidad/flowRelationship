@@ -1,17 +1,17 @@
 function drawLine({ startX, startY }, { endX, endY }, rate = 0.1) {
-  const cx1 = endX - 120;
+  const cx1 = startX + 50;
   const cy1 = startY;
-  const cx2 = startX;
-  const cy2 = endY;
+  const cx2 = endX - 50;
+  const cy2 = endY - (20 * ((endY / startY) - 1));
 
   const startPoint = `${startX} ${startY}`;
-  const endPoint = `${endX} ${endY}`;
+  const endPoint = `${endX + (rate * 1)} ${endY}`;
   const cLine = `${cx1} ${cy1}, ${cx2} ${cy2}`;
 
   return `<path d="M${startPoint} C ${cLine}, ${endPoint}" stroke="#5682ff" fill="transparent" stroke-width="${rate * 10}" stroke-opacity="0.5"/>`;
 }
 
-function drawInfo({ startX, startY }, title, value, selected) {
+function drawInfo({ startX, startY }, id, title, value, selected) {
   const titleX = (startX - 0) + 10;
   const titleY = (startY - 0) + 25;
   const valueX = (startX - 0) + 100;
@@ -20,7 +20,7 @@ function drawInfo({ startX, startY }, title, value, selected) {
   const textColor = selected ? '#ffffff' : '#333333';
 
   return `<g>
-    <rect x="${startX}" y="${startY}"  rx="4" ry="4" width="200" height="40"  fill="${backgroundColor}" />
+    <rect class="infoBlock" id="${id}" x="${startX}" y="${startY}"  rx="4" ry="4" width="200" height="40"  fill="${backgroundColor}" />
     <text x="${titleX}" y="${titleY}" font-family="Verdana" font-size="12" font-weight="300" fill="${textColor}">${title}</text>
     <text x="${valueX}" y="${valueY}" font-family="Verdana" font-size="12" font-weight="700" fill="${textColor}">${value}</text>
     </g>`;
@@ -35,8 +35,9 @@ function drawInfo({ startX, startY }, title, value, selected) {
  *   from: number(from which point and it's id),
  */
 export default class {
-  constructor({ data = [], wrapElement }) {
+  constructor({ data = [], wrapElement, clickInfoBlock }) {
     this.renderWrap = wrapElement;
+    this.clickInfoBlockCB = clickInfoBlock;
     this._resetData();
 
     if (data.length) {
@@ -47,6 +48,7 @@ export default class {
   _resetData() {
     this.CoordinateData = [];
     this.canvasSize = { height: 0, width: 0 };
+    this.renderWrap.innerHTML = '';
   }
 
   _parseDataToGroup(data = []) {
@@ -111,7 +113,7 @@ export default class {
           ? `${value}（${Math.ceil((value / fromNode.value) * 100)}%）`
           : value;
 
-        return drawInfo({ startX, startY }, name, valueText, hasChild);
+        return drawInfo({ startX, startY }, id, name, valueText, hasChild);
       }).join('');
 
     return infoHtmlStr;
@@ -136,8 +138,20 @@ export default class {
     return infoHtmlStr;
   }
 
+  _bindEvent() {
+    if (this.clickInfoBlockCB) {
+      const infoBlocks = this.renderWrap.querySelectorAll('.infoBlock');
+
+      Array.prototype.forEach.call(infoBlocks, (infoBlock) => {
+        infoBlock.addEventListener('click', ({ target }) => {
+          this.clickInfoBlockCB(target.id);
+        });
+      });
+    }
+  }
+
   drawRelationship(data) {
-    this._parseDataToGroup(data);
+    this._parseDataToGroup(data.concat());
     this._addCoordinateToData();
 
     const { height, width } = this.canvasSize;
@@ -147,5 +161,6 @@ export default class {
       </svg>`;
 
     this.renderWrap.innerHTML = relationShipHtmlStr;
+    this._bindEvent();
   }
 }
