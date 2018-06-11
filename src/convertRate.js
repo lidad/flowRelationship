@@ -4,13 +4,17 @@ const BOX_INTERVAL = 16;
 const BOX_ARROW_INTERVAL = 24;
 const ARROW_LENGTH = 168;
 const ARROW_HEAD_HEIGHT = 8;
+const EXTENSION_WIDTH = 108;
+const BOX_EXTENSION_INTERVAL = 4;
 
-function drawTotalCount(totalCount) {
+function drawTotalCount(totalCount, name, value) {
   const boxStartX = ARROW_LENGTH + BOX_ARROW_INTERVAL;
   const lineHeight = BOX_HEIGHT / 2;
 
   return `<g>
-      <text x="16" y="${lineHeight - 12}" font-size="12" fill="#999999">数据总量：${totalCount}</text>
+      ${name
+    ? `<text x="16" y="${lineHeight - 12}" font-size="12" fill="#999999">${name}：${value}</text>`
+    : ''}
       <line x1="0" y1="${lineHeight}" x2="${ARROW_LENGTH}" y2="${lineHeight}" fill="none" stroke="#e5e5e5" stroke-width="2"/>
       <rect x="${boxStartX}" y="0" width="${BOX_WIDTH}" height="60" fill="#108ee9"/>
     </g>`;
@@ -32,7 +36,7 @@ function drawLine({ startX, startY }, text) {
 }
 
 function drawRateBox({ startX, startY }, convertRate) {
-  const convertX = 168 * convertRate;
+  const convertX = BOX_WIDTH * convertRate;
   const unConvertWidth = BOX_WIDTH - convertX;
 
   return `<g>
@@ -40,11 +44,28 @@ function drawRateBox({ startX, startY }, convertRate) {
       <rect x="${startX + unConvertWidth}" y="${startY}" width="${convertX}" height="60" fill="#108ee9"/>
     </g>`;
 }
+
+function drawExtensionInfo({ startX, startY }, from, extensionInfo) {
+  const fromX = startX + BOX_WIDTH + BOX_EXTENSION_INTERVAL;
+  const extensionInfoStr = extensionInfo.map(({ name, value }, i) => {
+    const extensionStartX = fromX + (EXTENSION_WIDTH * (i + 1)) + 24;
+
+    return `<text x="${extensionStartX}" y="${startY + 26}" font-size="12" font-weight="200" fill="#999999">${name}</text>
+    <text x="${extensionStartX}" y="${startY + 44}" font-size="12" font-weight="700" fill="#333333">${value}</text>`;
+  });
+
+  return `<g>
+      <rect x="${fromX}" y="${startY}" width="${EXTENSION_WIDTH * (extensionInfo.length + 1)}" height="60" fill="#e9f2fe"/>
+      <text x="${fromX + 24}" y="${startY + 35}" font-size="14" font-weight="200" fill="#1E1E1E">${from}</text>
+      ${extensionInfoStr}
+    </g>`;
+}
 /**
  * data:[{
  *  id: number,
  *  name: string,
- *  value: number
+ *  value: number,
+ *  from: string
  * }]
  */
 export default class {
@@ -62,7 +83,10 @@ export default class {
   }
 
   _parseData(data) {
-    const totalCount = data.reduce((count, { value }) => count + value, 0);
+    const { totalCount, maxExtension } = data.reduce((resObj, { value, extensionInfo }) => ({
+      totalCount: resObj.totalCount + (value || 0),
+      maxExtension: Math.max(resObj.maxExtension, extensionInfo ? extensionInfo.length : 0),
+    }), { totalCount: 0, maxExtension: 0 });
 
     this.data = data.map(item => Object.assign({
       convertRate: Math.ceil((item.value / totalCount) * 100) / 100,
@@ -70,8 +94,9 @@ export default class {
     this.totalCount = totalCount;
 
     this.canvasSize = {
-      height: BOX_HEIGHT + ((BOX_HEIGHT + BOX_INTERVAL) * data.length),
-      width: ARROW_LENGTH + BOX_ARROW_INTERVAL + BOX_WIDTH,
+      height: (BOX_HEIGHT + BOX_INTERVAL) * data.length,
+      width: ARROW_LENGTH + BOX_ARROW_INTERVAL + BOX_WIDTH
+        + BOX_EXTENSION_INTERVAL + (EXTENSION_WIDTH * (maxExtension + 1)),
     };
   }
 
@@ -79,14 +104,18 @@ export default class {
     const boxBlockHeight = BOX_HEIGHT + BOX_INTERVAL;
     const boxBlockOffset = ARROW_LENGTH + BOX_ARROW_INTERVAL;
 
-    return this.data.map(({ convertRate }, i) => {
-      const startPoint = {
-        startX: boxBlockOffset,
-        startY: boxBlockHeight * (i + 1),
-      };
+    return this.data.map(({ convertRate, from, extensionInfo = [] }, i) => {
+      if (i) {
+        const startPoint = {
+          startX: boxBlockOffset,
+          startY: boxBlockHeight * i,
+        };
 
 
-      return drawRateBox(startPoint, convertRate);
+        return `${drawRateBox(startPoint, convertRate)}${drawExtensionInfo(startPoint, from, extensionInfo)}`;
+      }
+
+      return `${drawTotalCount(this.totalCount)}${drawExtensionInfo({ startX: boxBlockOffset, startY: 0 }, from, extensionInfo)}`;
     });
   }
 
@@ -94,7 +123,7 @@ export default class {
     const arrowHeight = BOX_HEIGHT + BOX_INTERVAL;
     const startHeight = BOX_HEIGHT / 2;
 
-    return this.data.map(({ value, name, convertRate }, i) => {
+    return this.data.slice(1, this.data.length).map(({ value, name, convertRate }, i) => {
       const startPoint = {
         startX: 0,
         startY: startHeight + (arrowHeight * i),
@@ -111,7 +140,6 @@ export default class {
 
       const { height, width } = this.canvasSize;
       const convertChartStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" version="1.1">
-          ${drawTotalCount(this.totalCount)}
           ${this._drawRateBox()}
           ${this._drawConvertArrow()}
         </svg>`;
